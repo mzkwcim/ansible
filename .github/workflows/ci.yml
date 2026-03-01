@@ -3,9 +3,9 @@ name: ci
 on:
   push:
     branches: ["master", "main"]
-  pull_requests:
+  pull_request:
 
-permissons:
+permissions:
   contents: Read
 
 jobs:
