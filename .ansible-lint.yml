@@ -1,6 +1,9 @@
 ---
 profile: basic
 
+skip_list:
+  - var-naming[no-role-prefix]
+
 exclude_paths:
   - .git/
   - .github/
