@@ -1,14 +1,15 @@
+---
 admin_user: "waldemar"
-admin_ssh_pubkey: ""     
+admin_ssh_pubkey: ""
 
 set_strong_password: true
 
 enable_mfa: true
-mfa_rate_limit: "3 30"     
-mfa_window: 3              
-mfa_force: true           
+mfa_rate_limit: "3 30"
+mfa_window: 3
+mfa_force: true
 
 disable_root_login: true
-disable_password_auth: true  
+disable_password_auth: true
 
 secrets_dir: "/root/bootstrap-secrets"

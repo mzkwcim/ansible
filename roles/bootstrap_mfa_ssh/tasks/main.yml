@@ -1,3 +1,4 @@
+---
 - name: Ensure packages for MFA + password hashing are installed (Debian/Ubuntu)
   ansible.builtin.apt:
     name:
@@ -119,12 +120,12 @@
     line: "{{ item.key }} {{ item.value }}"
     state: present
   loop:
-    - { key: "PermitRootLogin", value: "{{ 'no' if disable_root_login else 'prohibit-password' }}" }
-    - { key: "PubkeyAuthentication", value: "yes" }
-    - { key: "PasswordAuthentication", value: "{{ 'no' if disable_password_auth else 'yes' }}" }
-    - { key: "KbdInteractiveAuthentication", value: "{{ 'yes' if enable_mfa else 'no' }}" }
-    - { key: "ChallengeResponseAuthentication", value: "{{ 'yes' if enable_mfa else 'no' }}" }
-    - { key: "UsePAM", value: "yes" }
+    - {key: "PermitRootLogin", value: "{{ 'no' if disable_root_login else 'prohibit-password' }}"}
+    - {key: "PubkeyAuthentication", value: "yes"}
+    - {key: "PasswordAuthentication", value: "{{ 'no' if disable_password_auth else 'yes' }}"}
+    - {key: "KbdInteractiveAuthentication", value: "{{ 'yes' if enable_mfa else 'no' }}"}
+    - {key: "ChallengeResponseAuthentication", value: "{{ 'yes' if enable_mfa else 'no' }}"}
+    - {key: "UsePAM", value: "yes"}
   notify: Restart ssh
 
 - name: Enforce MFA for admin_user via Match block

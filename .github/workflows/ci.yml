@@ -1,3 +1,4 @@
+---
 name: ci
 
 on:
@@ -45,6 +46,6 @@ jobs:
           fetch-depth: 0
 
       - name: Run gitleaks
-        uses: actions/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN ${{ secrets.GITHUB_TOKEN }}

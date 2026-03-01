@@ -1,3 +1,4 @@
+---
 - name: Bootstrap host (user + SSH hardening + MFA)
   hosts: all
   become: true
