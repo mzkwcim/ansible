@@ -1,0 +1,19 @@
+# local reports / artifacts
+reports/
+*.log
+
+# secrets
+bootstrap-secrets/
+**/*secrets*.txt
+**/*.pem
+**/*.key
+
+# python
+__pycache__/
+*.pyc
+
+# ansible
+*.retry
+
+# mac/linux
+.DS_Store

@@ -1,0 +1,5 @@
+- name: Bootstrap host (user + SSH hardening + MFA)
+  hosts: all
+  become: true
+  roles:
+    - role: bootstrap_mfa_ssh

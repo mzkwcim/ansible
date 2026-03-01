@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  push:
+    branches: ["master", "main"]
+  pull_requests:
+
+permissons:
+  contents: Read
+
+jobs:
+  lint:
+    name: Lint (YAML + Ansible)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install linters
+        run: |
+          python -m pip install -U pip
+          pip install yamllint ansible-lint
+
+      - name: yamllint
+        run: yamllint .
+
+      - name: ansible-lint
+        run: ansible-lint
+
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: actions/gitleaks-actions@v2
+        env:
+          GITHUB_TOKEN ${{ secrets.GITHUB_TOKEN }}

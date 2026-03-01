@@ -1,0 +1,149 @@
+- name: Ensure packages for MFA + password hashing are installed (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name:
+      - libpam-google-authenticator
+      - whois
+    update_cache: true
+    state: present
+  when: ansible_facts.os_family == "Debian"
+
+- name: Ensure secrets dir exists (root-only)
+  ansible.builtin.file:
+    path: "{{ secrets_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Create admin user
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    shell: /bin/bash
+    groups: sudo
+    append: true
+    create_home: true
+    state: present
+
+- name: Authorize SSH key for admin user
+  ansible.posix.authorized_key:
+    user: "{{ admin_user }}"
+    key: "{{ admin_ssh_pubkey }}"
+    state: present
+  when: admin_ssh_pubkey | length > 20
+
+- name: Generate strong random password
+  ansible.builtin.set_fact:
+    admin_password_plain: "{{ lookup('password', '/dev/null length=22 chars=ascii_letters,digits') }}"
+  when: set_strong_password | bool
+
+- name: Set password for admin user (SHA-512)
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    password: "{{ admin_password_plain | password_hash('sha512') }}"
+  when: set_strong_password | bool
+
+- name: Run google-authenticator for admin user (non-interactive)
+  ansible.builtin.command: >
+    sudo -u {{ admin_user }} google-authenticator
+    -t -d -f
+    -r {{ (mfa_rate_limit.split(' ')[0]) | int }}
+    -R {{ (mfa_rate_limit.split(' ')[1]) | int }}
+    -w {{ mfa_window | int }}
+    -Q UTF8
+  args:
+    creates: "/home/{{ admin_user }}/.google_authenticator"
+  register: ga_run
+  changed_when: ga_run.rc == 0
+  when: enable_mfa | bool
+
+- name: Read MFA secret file
+  ansible.builtin.slurp:
+    src: "/home/{{ admin_user }}/.google_authenticator"
+  register: ga_file
+  when: enable_mfa | bool
+
+- name: Parse MFA secret and scratch codes
+  ansible.builtin.set_fact:
+    mfa_secret: "{{ (ga_file.content | b64decode).splitlines()[0] }}"
+    mfa_scratch: >-
+      {{
+        (ga_file.content | b64decode).splitlines()
+        | select('match', '^[0-9]{8}$')
+        | list
+      }}
+  when: enable_mfa | bool
+
+- name: Build otpauth URL (for QR import)
+  ansible.builtin.set_fact:
+    mfa_otpauth_url: "otpauth://totp/{{ inventory_hostname }}:{{ admin_user }}?secret={{ mfa_secret }}&issuer={{ inventory_hostname }}"
+  when: enable_mfa | bool
+
+- name: Save bootstrap secrets to root-only file
+  ansible.builtin.copy:
+    dest: "{{ secrets_dir }}/{{ inventory_hostname }}-{{ admin_user }}.txt"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      Host: {{ inventory_hostname }}
+      User: {{ admin_user }}
+
+      {% if set_strong_password | bool %}
+      Password: {{ admin_password_plain }}
+      {% else %}
+      Password: (not set by automation)
+      {% endif %}
+
+      MFA secret: {{ mfa_secret }}
+      otpauth URL: {{ mfa_otpauth_url }}
+
+      Scratch codes:
+      {% for c in mfa_scratch %}
+      - {{ c }}
+      {% endfor %}
+  when: enable_mfa | bool
+
+- name: Ensure PAM google-authenticator is enabled for sshd
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/sshd
+    insertafter: '^@include common-auth'
+    line: "auth required pam_google_authenticator.so"
+    state: present
+  when: enable_mfa | bool
+  notify: Restart ssh
+
+- name: Set sshd_config basics
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^{{ item.key }}\\s+"
+    line: "{{ item.key }} {{ item.value }}"
+    state: present
+  loop:
+    - { key: "PermitRootLogin", value: "{{ 'no' if disable_root_login else 'prohibit-password' }}" }
+    - { key: "PubkeyAuthentication", value: "yes" }
+    - { key: "PasswordAuthentication", value: "{{ 'no' if disable_password_auth else 'yes' }}" }
+    - { key: "KbdInteractiveAuthentication", value: "{{ 'yes' if enable_mfa else 'no' }}" }
+    - { key: "ChallengeResponseAuthentication", value: "{{ 'yes' if enable_mfa else 'no' }}" }
+    - { key: "UsePAM", value: "yes" }
+  notify: Restart ssh
+
+- name: Enforce MFA for admin_user via Match block
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} ANSIBLE MFA MATCH"
+    block: |
+      Match User {{ admin_user }}
+        AuthenticationMethods publickey,keyboard-interactive:pam
+  when: enable_mfa | bool and mfa_force | bool
+  notify: Restart ssh
+
+- name: Show secrets ONCE (stdout) - keep private!
+  ansible.builtin.debug:
+    msg:
+      - "Admin user: {{ admin_user }}"
+      - "Password: {{ admin_password_plain if (set_strong_password | bool) else '(not set)' }}"
+      - "MFA secret: {{ mfa_secret }}"
+      - "otpauth URL: {{ mfa_otpauth_url }}"
+      - "Scratch codes: {{ mfa_scratch }}"
+      - "Saved to: {{ secrets_dir }}/{{ inventory_hostname }}-{{ admin_user }}.txt (0600)"
+  when: enable_mfa | bool
